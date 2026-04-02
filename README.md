@@ -95,7 +95,7 @@ ramlpy-ng info api.raml
 
 ## Documentation
 
-See the [full documentation](docs/README.md) for detailed guides and API reference.
+See the [full documentation](https://github.com/Apex-94/ramlpy/blob/main/docs/README.md) for detailed guides and API reference.
 
 ## License
 
