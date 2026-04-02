@@ -2,6 +2,359 @@
 
 from ramlpy.validator.errors import ValidationIssue, ValidationResult
 from ramlpy.validator.scalars import coerce_scalar
+from ramlpy.validator.jsonschema_support import validate_with_jsonschema, HAS_JSONSCHEMA
+
+
+def _resolve_type_spec(api_spec, type_ref):
+    """Resolve a type reference to its TypeSpec.
+    
+    Args:
+        api_spec: The ApiSpec containing the types registry
+        type_ref: TypeRef or string type name
+    
+    Returns:
+        TypeSpec or None
+    """
+    if type_ref is None:
+        return None
+    
+    name = type_ref.name if hasattr(type_ref, 'name') else type_ref
+    return api_spec.types.get(name)
+
+
+def _build_json_schema_from_type(api_spec, type_spec, visited=None):
+    """Build a JSON Schema from a TypeSpec for validation.
+    
+    Args:
+        api_spec: The ApiSpec for resolving type references
+        type_spec: The TypeSpec to convert
+        visited: Set of already-visited type names (for circular ref detection)
+    
+    Returns:
+        dict: JSON Schema dict
+    """
+    if type_spec is None:
+        return {}
+    
+    if visited is None:
+        visited = set()
+    
+    # If there's a schema_source (from RAML 0.8 JSON schema), use it directly
+    if type_spec.schema_source:
+        return type_spec.schema_source
+    
+    # If there's an inline_definition (from RAML 1.0 inline types), convert it
+    if type_spec.inline_definition:
+        return _convert_inline_definition(api_spec, type_spec.inline_definition, visited)
+    
+    # Build schema from type properties (fallback for manually constructed TypeSpec)
+    schema = {"type": type_spec.base_type or "object"}
+    
+    if type_spec.enum:
+        schema["enum"] = type_spec.enum
+    
+    if type_spec.base_type == "object" and type_spec.properties:
+        schema["properties"] = {}
+        required = []
+        
+        for prop_name, prop_def in type_spec.properties.items():
+            if isinstance(prop_def, dict):
+                if prop_def.get("required"):
+                    required.append(prop_name)
+                prop_schema = _convert_property_dict(api_spec, prop_def, visited.copy())
+            else:
+                prop_schema = _scalar_type_to_schema(prop_def)
+            schema["properties"][prop_name] = prop_schema
+        
+        if required:
+            schema["required"] = required
+    
+    elif type_spec.base_type == "array" and type_spec.items:
+        items_type_spec = _resolve_type_spec(api_spec, type_spec.items)
+        if items_type_spec:
+            schema["items"] = _build_json_schema_from_type(api_spec, items_type_spec, visited.copy())
+        elif isinstance(type_spec.items, str):
+            items_type_spec = _resolve_type_spec(api_spec, type_spec.items)
+            if items_type_spec:
+                schema["items"] = _build_json_schema_from_type(api_spec, items_type_spec, visited.copy())
+            else:
+                schema["items"] = _scalar_type_to_schema(type_spec.items)
+        else:
+            schema["items"] = _scalar_type_to_schema(type_spec.items)
+    
+    # Add facets from the type itself
+    schema = _add_facets_to_schema(schema, type_spec)
+    
+    return schema
+
+
+def _convert_inline_definition(api_spec, definition, visited):
+    """Convert an inline definition dict to JSON Schema."""
+    if not isinstance(definition, dict):
+        return _scalar_type_to_schema(definition)
+    
+    # Check if it has a 'type' key that references a named type
+    type_val = definition.get("type")
+    if isinstance(type_val, str) and type_val in api_spec.types:
+        type_spec = api_spec.types[type_val]
+        if type_spec.name not in visited:
+            visited.add(type_spec.name)
+            return _build_json_schema_from_type(api_spec, type_spec, visited.copy())
+        else:
+            return {}  # Circular reference, skip
+    
+    # It's an object definition with properties
+    schema = {}
+    
+    if "type" in definition:
+        type_val = definition["type"]
+        if isinstance(type_val, str) and type_val in api_spec.types:
+            # Named type reference
+            type_spec = api_spec.types[type_val]
+            if type_spec.name not in visited:
+                visited.add(type_spec.name)
+                return _build_json_schema_from_type(api_spec, type_spec, visited.copy())
+            else:
+                return {}
+        elif isinstance(type_val, str):
+            schema["type"] = _raml_type_to_json_type(type_val)
+        else:
+            schema["type"] = type_val
+    
+    if "properties" in definition:
+        schema["properties"] = {}
+        required = []
+        for prop_name, prop_def in definition["properties"].items():
+            if isinstance(prop_def, dict):
+                if prop_def.get("required"):
+                    required.append(prop_name)
+                schema["properties"][prop_name] = _convert_property_dict(api_spec, prop_def, visited.copy())
+            else:
+                schema["properties"][prop_name] = _scalar_type_to_schema(prop_def)
+        if required:
+            schema["required"] = required
+    
+    if "items" in definition:
+        items_val = definition["items"]
+        if isinstance(items_val, str) and items_val in api_spec.types:
+            items_type_spec = api_spec.types[items_val]
+            if items_type_spec.name not in visited:
+                visited.add(items_type_spec.name)
+                schema["items"] = _build_json_schema_from_type(api_spec, items_type_spec, visited.copy())
+            else:
+                schema["items"] = {}
+        elif isinstance(items_val, dict):
+            schema["items"] = _convert_property_dict(api_spec, items_val, visited.copy())
+        else:
+            schema["items"] = _scalar_type_to_schema(items_val)
+    
+    # Copy over facet constraints
+    for facet in ["minimum", "maximum", "minLength", "maxLength", "pattern", 
+                  "enum", "minItems", "maxItems", "default"]:
+        if facet in definition:
+            schema[facet] = definition[facet]
+    
+    return schema
+
+
+def _convert_property_dict(api_spec, prop_def, visited):
+    """Convert a property definition dict to JSON Schema."""
+    if not isinstance(prop_def, dict):
+        return _scalar_type_to_schema(prop_def)
+    
+    type_val = prop_def.get("type")
+    
+    if isinstance(type_val, str) and type_val in api_spec.types:
+        type_spec = api_spec.types[type_val]
+        if type_spec.name not in visited:
+            visited.add(type_spec.name)
+            return _build_json_schema_from_type(api_spec, type_spec, visited.copy())
+        else:
+            return {}
+    
+    schema = {}
+    if isinstance(type_val, str):
+        schema["type"] = _raml_type_to_json_type(type_val)
+    elif type_val is not None:
+        schema["type"] = type_val
+    
+    # Handle nested items for arrays
+    if "items" in prop_def:
+        items_val = prop_def["items"]
+        if isinstance(items_val, str) and items_val in api_spec.types:
+            items_type_spec = api_spec.types[items_val]
+            if items_type_spec.name not in visited:
+                visited.add(items_type_spec.name)
+                schema["items"] = _build_json_schema_from_type(api_spec, items_type_spec, visited.copy())
+            else:
+                schema["items"] = {}
+        elif isinstance(items_val, dict):
+            schema["items"] = _convert_property_dict(api_spec, items_val, visited.copy())
+        else:
+            schema["items"] = _scalar_type_to_schema(items_val)
+    
+    # Handle nested properties for objects
+    if "properties" in prop_def:
+        schema["properties"] = {}
+        required = []
+        for pname, pdef in prop_def["properties"].items():
+            if isinstance(pdef, dict):
+                if pdef.get("required"):
+                    required.append(pname)
+                schema["properties"][pname] = _convert_property_dict(api_spec, pdef, visited.copy())
+            else:
+                schema["properties"][pname] = _scalar_type_to_schema(pdef)
+        if required:
+            schema["required"] = required
+    
+    # Copy facets
+    for facet in ["minimum", "maximum", "minLength", "maxLength", "pattern",
+                  "enum", "minItems", "maxItems", "default"]:
+        if facet in prop_def:
+            schema[facet] = prop_def[facet]
+    
+    return schema
+
+
+def _raml_type_to_json_type(raml_type):
+    """Convert a RAML type name to a JSON Schema type."""
+    type_map = {
+        "string": "string",
+        "integer": "integer",
+        "int": "integer",
+        "number": "number",
+        "float": "number",
+        "double": "number",
+        "boolean": "boolean",
+        "bool": "boolean",
+        "date": "string",
+        "datetime": "string",
+        "time": "string",
+        "file": "string",
+        "any": None,
+        "nil": "null",
+        "null": "null",
+        "object": "object",
+        "array": "array",
+    }
+    return type_map.get(raml_type.lower(), raml_type)
+
+
+def _scalar_type_to_schema(type_ref):
+    """Convert a scalar type reference to a JSON Schema type."""
+    type_map = {
+        "string": {"type": "string"},
+        "integer": {"type": "integer"},
+        "int": {"type": "integer"},
+        "number": {"type": "number"},
+        "float": {"type": "number"},
+        "double": {"type": "number"},
+        "boolean": {"type": "boolean"},
+        "bool": {"type": "boolean"},
+        "date": {"type": "string", "format": "date"},
+        "datetime": {"type": "string", "format": "date-time"},
+        "time": {"type": "string", "format": "time"},
+        "file": {"type": "string"},
+        "any": {},
+        "nil": {"type": "null"},
+        "null": {"type": "null"},
+    }
+    name = type_ref.name if hasattr(type_ref, 'name') else type_ref
+    return type_map.get(name.lower(), {})
+
+
+def _add_facets_to_schema(schema, spec):
+    """Add validation facets from a spec to the JSON Schema."""
+    if spec is None:
+        return schema
+    
+    facets = getattr(spec, 'facets', {}) or {}
+    
+    # Direct attributes on ParameterSpec/TypeSpec
+    for attr in ['minimum', 'maximum', 'minLength', 'maxLength', 
+                 'min_length', 'max_length', 'pattern', 'enum',
+                 'minItems', 'maxItems', 'min_items', 'max_items']:
+        val = getattr(spec, attr, None)
+        if val is not None:
+            json_attr = attr.replace('_', '')
+            if json_attr == 'minlength':
+                json_attr = 'minLength'
+            elif json_attr == 'maxlength':
+                json_attr = 'maxLength'
+            elif json_attr == 'minitems':
+                json_attr = 'minItems'
+            elif json_attr == 'maxitems':
+                json_attr = 'maxItems'
+            schema[json_attr] = val
+    
+    # Facets dict
+    if facets:
+        facet_map = {
+            'minimum': 'minimum',
+            'maximum': 'maximum',
+            'minLength': 'minLength',
+            'maxLength': 'maxLength',
+            'min_length': 'minLength',
+            'max_length': 'maxLength',
+            'pattern': 'pattern',
+            'enum': 'enum',
+            'minItems': 'minItems',
+            'maxItems': 'maxItems',
+            'min_items': 'minItems',
+            'max_items': 'maxItems',
+        }
+        for facet_key, json_key in facet_map.items():
+            if facet_key in facets:
+                schema[json_key] = facets[facet_key]
+    
+    return schema
+
+
+def _validate_body(api_spec, method_spec, body, content_type):
+    """Validate request body against the method's body schema.
+    
+    Args:
+        api_spec: The ApiSpec containing types registry
+        method_spec: The MethodSpec for the request
+        body: The request body to validate
+        content_type: The Content-Type of the request
+    
+    Returns:
+        list: List of ValidationIssue dicts
+    """
+    if body is None:
+        return []
+    
+    # Get the body spec for the content type
+    body_spec = None
+    if method_spec.bodies and content_type:
+        body_spec = method_spec.bodies.get(content_type)
+    
+    # Fall back to any body spec if content type doesn't match
+    if body_spec is None and method_spec.bodies:
+        for spec in method_spec.bodies.values():
+            body_spec = spec
+            break
+    
+    if body_spec is None:
+        return []
+    
+    # Get the type reference from the body spec
+    type_ref = body_spec.type_ref
+    if type_ref is None:
+        return []
+    
+    # Resolve the type
+    type_spec = _resolve_type_spec(api_spec, type_ref)
+    if type_spec is None:
+        return []
+    
+    # Build JSON Schema and validate
+    schema = _build_json_schema_from_type(api_spec, type_spec)
+    if not schema:
+        return []
+    
+    return [issue.as_dict() for issue in validate_with_jsonschema(schema, body, "#/body")]
 
 
 def validate_parameter(param_spec, raw_value, pointer):
@@ -122,5 +475,9 @@ def validate_request(api_spec, path, method, path_params,
             errors.append(error.as_dict())
         else:
             validated["headers"][name] = value
+    
+    # Validate request body
+    body_errors = _validate_body(api_spec, target_method, body, content_type)
+    errors.extend(body_errors)
     
     return ValidationResult(ok=(len(errors) == 0), data=validated, errors=errors)
