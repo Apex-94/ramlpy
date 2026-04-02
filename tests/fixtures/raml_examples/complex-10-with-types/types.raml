@@ -1,0 +1,75 @@
+#%RAML 1.0 Library
+
+types:
+  Money:
+    type: object
+    properties:
+      currency:
+        type: string
+        enum: [ USD, EUR, INR ]
+      amount:
+        type: number
+        minimum: 0
+
+  Address:
+    type: object
+    properties:
+      line1: string
+      line2?: string
+      city: string
+      state?: string
+      postalCode: string
+      country: string
+
+  CustomerSummary:
+    type: object
+    properties:
+      customerId: integer
+      email: string
+      fullName: string
+
+  OrderItem:
+    type: object
+    properties:
+      sku: string
+      name: string
+      quantity:
+        type: integer
+        minimum: 1
+      unitPrice: Money
+
+  Order:
+    type: object
+    properties:
+      id: integer
+      status:
+        type: string
+        enum: [ pending, paid, packed, shipped, delivered, cancelled ]
+      customer: CustomerSummary
+      shippingAddress: Address
+      items: OrderItem[]
+      total: Money
+      createdAt: datetime
+
+  OrderCreateRequest:
+    type: object
+    properties:
+      customerId: integer
+      shippingAddress: Address
+      items:
+        type: OrderItem[]
+        minItems: 1
+
+  OrderStatusUpdate:
+    type: object
+    properties:
+      status:
+        type: string
+        enum: [ pending, paid, packed, shipped, delivered, cancelled ]
+
+  ErrorResponse:
+    type: object
+    properties:
+      code: string
+      message: string
+      details?: string

@@ -1,0 +1,73 @@
+#%RAML 0.8
+---
+title: Orders API
+version: v1
+baseUri: https://orders.example.com/{version}
+mediaType: application/json
+protocols: [ HTTPS ]
+schemas:
+  - !include types.raml
+resourceTypes:
+  - collection: !include resourceTypes/collection.yaml
+  - member: !include resourceTypes/member.yaml
+traits:
+  - paged: !include traits/paged.yaml
+  - requestId: !include traits/request-id.yaml
+  - secured: !include traits/secured.yaml
+securitySchemes:
+  - oauth_2_0:
+      description: OAuth 2.0 access token in the Authorization header.
+      type: OAuth 2.0
+      describedBy:
+        headers:
+          Authorization:
+            description: Bearer access token.
+            type: string
+            required: true
+      settings:
+        authorizationUri: https://auth.example.com/oauth/authorize
+        accessTokenUri: https://auth.example.com/oauth/token
+        authorizationGrants: [ authorization_code ]
+securedBy: [ oauth_2_0 ]
+
+/orders:
+  type:
+    collection:
+      itemSchema: Order
+      collectionSchema: Orders
+      createSchema: OrderCreate
+  is: [ requestId ]
+  get:
+    is: [ paged, secured ]
+  post:
+    is: [ secured ]
+
+/orders/{orderId}:
+  uriParameters:
+    orderId:
+      type: integer
+      required: true
+  type:
+    member:
+      itemSchema: Order
+      updateSchema: OrderUpdate
+  is: [ requestId ]
+  get:
+    is: [ secured ]
+  patch:
+    is: [ secured ]
+  delete:
+    is: [ secured ]
+
+/orders/{orderId}/items:
+  get:
+    description: List order items.
+    responses:
+      200:
+        body:
+          application/json:
+            schema: OrderItems
+      404:
+        body:
+          application/json:
+            schema: Error

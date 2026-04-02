@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "required": [
+    "id",
+    "customerId",
+    "status",
+    "total"
+  ],
+  "properties": {
+    "id": {
+      "type": "integer"
+    },
+    "customerId": {
+      "type": "integer"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "confirmed",
+        "shipped",
+        "cancelled"
+      ]
+    },
+    "total": {
+      "type": "number"
+    }
+  }
+}

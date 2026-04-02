@@ -1,0 +1,36 @@
+#%RAML 0.8
+title: Simple API
+version: v1
+baseUri: http://api.example.com/{version}
+mediaType: application/json
+
+/users:
+  get:
+    queryParameters:
+      limit:
+        type: integer
+        default: 10
+        minimum: 1
+        maximum: 100
+      offset:
+        type: integer
+        default: 0
+    responses:
+      200:
+        body:
+          application/json:
+            example: |
+              [{"id": 1, "name": "John"}]
+  
+  /{id}:
+    get:
+      uriParameters:
+        id:
+          type: integer
+          required: true
+      responses:
+        200:
+          body:
+            application/json:
+              example: |
+                {"id": 1, "name": "John"}

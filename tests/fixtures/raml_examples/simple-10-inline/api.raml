@@ -1,0 +1,77 @@
+#%RAML 1.0
+title: Simple Product API
+version: v1
+baseUri: https://api.example.com/{version}
+mediaType: application/json
+protocols: [ HTTPS ]
+
+types:
+  Product:
+    type: object
+    properties:
+      id: integer
+      name: string
+      category:
+        type: string
+        enum: [ electronics, books, home ]
+      price: number
+      inStock?: boolean
+    example:
+      id: 1001
+      name: Keyboard
+      category: electronics
+      price: 49.99
+      inStock: true
+
+  ProductCreateRequest:
+    type: object
+    properties:
+      name: string
+      category:
+        type: string
+        enum: [ electronics, books, home ]
+      price: number
+      inStock?: boolean
+
+/products:
+  get:
+    queryParameters:
+      category?:
+        type: string
+        enum: [ electronics, books, home ]
+      limit?:
+        type: integer
+        default: 10
+        minimum: 1
+        maximum: 100
+    responses:
+      200:
+        body:
+          application/json:
+            type: Product[]
+  post:
+    body:
+      application/json:
+        type: ProductCreateRequest
+    responses:
+      201:
+        body:
+          application/json:
+            type: Product
+
+/products/{productId}:
+  uriParameters:
+    productId:
+      type: integer
+      minimum: 1
+  get:
+    responses:
+      200:
+        body:
+          application/json:
+            type: Product
+      404:
+        body:
+          application/json:
+            example:
+              message: Product not found

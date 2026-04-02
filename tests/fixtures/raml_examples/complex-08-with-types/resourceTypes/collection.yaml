@@ -1,0 +1,26 @@
+usage: Use for collection resources.
+get:
+  description: List all <<resourcePathName>>.
+  responses:
+    200:
+      body:
+        application/json:
+          schema: <<collectionSchema>>
+    400:
+      body:
+        application/json:
+          schema: Error
+post:
+  description: Create a new <<resourcePathName | !singularize>>.
+  body:
+    application/json:
+      schema: <<createSchema>>
+  responses:
+    201:
+      body:
+        application/json:
+          schema: <<itemSchema>>
+    400:
+      body:
+        application/json:
+          schema: Error

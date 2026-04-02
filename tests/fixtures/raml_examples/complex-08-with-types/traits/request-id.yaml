@@ -1,0 +1,5 @@
+headers:
+  X-Request-Id:
+    type: string
+    required: false
+    description: Client-generated request correlation id.

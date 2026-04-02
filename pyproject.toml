@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ramlpy"
+version = "0.1.0"
+description = "A modern Python library for parsing and validating RAML 0.8 and 1.0 files"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.6"
+authors = [
+    {name = "Apex-94", email = "Apex-94@users.noreply.github.com"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "ruamel.yaml>=0.17.0",
+    "python-dateutil>=2.8.0",
+    "jsonschema>=3.0.0",
+    'typing_extensions>=3.7; python_version < "3.10"',
+]
+
+[project.optional-dependencies]
+flask = ["Flask>=1.0"]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
+    "pytest-flask>=1.0",
+    "flake8>=3.0",
+]
+
+[project.scripts]
+ramlpy = "ramlpy.cli.main:main"
+
+[tool.setuptools.packages.find]
+include = ["ramlpy*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

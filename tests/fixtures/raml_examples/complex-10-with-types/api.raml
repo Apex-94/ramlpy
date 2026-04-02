@@ -1,0 +1,127 @@
+#%RAML 1.0
+title: Order Management API
+version: v1
+baseUri: https://api.example.com/{version}
+mediaType: application/json
+protocols: [ HTTPS ]
+
+uses:
+  types: types.raml
+
+securitySchemes:
+  bearerAuth:
+    description: Standard bearer token authentication.
+    type: x-bearer
+    describedBy:
+      headers:
+        Authorization:
+          type: string
+          required: true
+          example: Bearer eyJhbGciOi...
+      responses:
+        401:
+          body:
+            application/json:
+              type: types.ErrorResponse
+
+traits:
+  pageable:
+    queryParameters:
+      page?:
+        type: integer
+        default: 1
+        minimum: 1
+      pageSize?:
+        type: integer
+        default: 25
+        minimum: 1
+        maximum: 100
+  traceable:
+    headers:
+      X-Correlation-Id?:
+        type: string
+        pattern: ^[A-Za-z0-9\-]+$
+
+resourceTypes:
+  collection:
+    get:
+      is: [ pageable, traceable ]
+      securedBy: [ bearerAuth ]
+      responses:
+        200:
+          body:
+            application/json:
+              type: <<itemType>>[]
+    post:
+      is: [ traceable ]
+      securedBy: [ bearerAuth ]
+      body:
+        application/json:
+          type: <<createType>>
+      responses:
+        201:
+          body:
+            application/json:
+              type: <<itemType>>
+        400:
+          body:
+            application/json:
+              type: types.ErrorResponse
+
+/orders:
+  type:
+    collection:
+      itemType: types.Order
+      createType: types.OrderCreateRequest
+  get:
+    description: List orders with pagination.
+    queryParameters:
+      status?:
+        type: string
+        enum: [ pending, paid, packed, shipped, delivered, cancelled ]
+      customerId?: integer
+  /{orderId}:
+    uriParameters:
+      orderId:
+        type: integer
+        minimum: 1
+    get:
+      is: [ traceable ]
+      securedBy: [ bearerAuth ]
+      responses:
+        200:
+          body:
+            application/json:
+              type: types.Order
+        404:
+          body:
+            application/json:
+              type: types.ErrorResponse
+    patch:
+      is: [ traceable ]
+      securedBy: [ bearerAuth ]
+      body:
+        application/json:
+          type: types.OrderStatusUpdate
+      responses:
+        200:
+          body:
+            application/json:
+              type: types.Order
+        400:
+          body:
+            application/json:
+              type: types.ErrorResponse
+        404:
+          body:
+            application/json:
+              type: types.ErrorResponse
+    /items:
+      get:
+        is: [ traceable ]
+        securedBy: [ bearerAuth ]
+        responses:
+          200:
+            body:
+              application/json:
+                type: types.OrderItem[]

@@ -1,0 +1,49 @@
+#%RAML 1.0
+title: Customer API
+version: v1
+baseUri: https://api.example.com/{version}
+mediaType: application/json
+protocols: [ HTTPS ]
+
+uses:
+  types: types.raml
+
+/customers:
+  get:
+    queryParameters:
+      email?: string
+      loyaltyLevel?: string
+    responses:
+      200:
+        body:
+          application/json:
+            type: types.Customer[]
+  post:
+    body:
+      application/json:
+        type: types.CustomerCreateRequest
+    responses:
+      201:
+        body:
+          application/json:
+            type: types.Customer
+      400:
+        body:
+          application/json:
+            type: types.ErrorResponse
+
+/customers/{customerId}:
+  uriParameters:
+    customerId:
+      type: integer
+      minimum: 1
+  get:
+    responses:
+      200:
+        body:
+          application/json:
+            type: types.Customer
+      404:
+        body:
+          application/json:
+            type: types.ErrorResponse

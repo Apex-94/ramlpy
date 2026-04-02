@@ -1,0 +1,25 @@
+#%RAML 1.0 Library
+
+types:
+  Customer:
+    type: object
+    properties:
+      id: integer
+      firstName: string
+      lastName: string
+      email: string
+      loyaltyLevel?: string
+
+  CustomerCreateRequest:
+    type: object
+    properties:
+      firstName: string
+      lastName: string
+      email: string
+      loyaltyLevel?: string
+
+  ErrorResponse:
+    type: object
+    properties:
+      code: string
+      message: string

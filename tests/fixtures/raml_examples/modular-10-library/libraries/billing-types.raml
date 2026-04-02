@@ -1,0 +1,28 @@
+#%RAML 1.0 Library
+usage: Shared billing library for Billing API examples.
+uses:
+  shared: ../fragments/shared-types.raml
+
+types:
+  InvoiceStatus:
+    type: string
+    enum: [ draft, sent, paid, overdue ]
+
+  Invoice:
+    type: object
+    properties:
+      id: integer
+      customer: shared.CustomerRef
+      amount: number
+      status: InvoiceStatus
+
+  InvoiceCreate:
+    type: object
+    properties:
+      customerId: integer
+      amount: number
+
+  Customer:
+    type: shared.CustomerBase
+    properties:
+      invoices?: Invoice[]

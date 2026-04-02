@@ -1,0 +1,47 @@
+#%RAML 1.0
+title: Billing API
+version: v1
+baseUri: https://billing.example.com/{version}
+mediaType: application/json
+uses:
+  billing: libraries/billing-types.raml
+
+traits:
+  audit:
+    headers:
+      X-Audit-Actor:
+        type: string
+        required: false
+
+/invoices:
+  get:
+    is: [ audit ]
+    queryParameters:
+      status:
+        type: billing.InvoiceStatus
+        required: false
+    responses:
+      200:
+        body:
+          application/json:
+            type: billing.Invoice[]
+  post:
+    body:
+      application/json:
+        type: billing.InvoiceCreate
+    responses:
+      201:
+        body:
+          application/json:
+            type: billing.Invoice
+
+/customers/{customerId}:
+  uriParameters:
+    customerId:
+      type: integer
+  get:
+    responses:
+      200:
+        body:
+          application/json:
+            type: billing.Customer

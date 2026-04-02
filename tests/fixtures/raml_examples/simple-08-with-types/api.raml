@@ -1,0 +1,59 @@
+#%RAML 0.8
+---
+title: Simple Users API
+version: v1
+baseUri: https://api.example.com/{version}
+mediaType: application/json
+schemas:
+  - !include types.raml
+
+/users:
+  get:
+    description: List users.
+    queryParameters:
+      limit:
+        type: integer
+        required: false
+        minimum: 1
+        maximum: 100
+        default: 20
+    responses:
+      200:
+        body:
+          application/json:
+            schema: Users
+      400:
+        body:
+          application/json:
+            schema: Error
+  post:
+    description: Create a user.
+    body:
+      application/json:
+        schema: UserCreate
+    responses:
+      201:
+        body:
+          application/json:
+            schema: User
+      400:
+        body:
+          application/json:
+            schema: Error
+
+/users/{userId}:
+  uriParameters:
+    userId:
+      type: integer
+      required: true
+  get:
+    description: Fetch one user by id.
+    responses:
+      200:
+        body:
+          application/json:
+            schema: User
+      404:
+        body:
+          application/json:
+            schema: Error

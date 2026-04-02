@@ -1,0 +1,30 @@
+usage: Use for single member resources.
+get:
+  description: Fetch one <<resourcePathName | !singularize>>.
+  responses:
+    200:
+      body:
+        application/json:
+          schema: <<itemSchema>>
+    404:
+      body:
+        application/json:
+          schema: Error
+patch:
+  description: Update one <<resourcePathName | !singularize>>.
+  body:
+    application/json:
+      schema: <<updateSchema>>
+  responses:
+    200:
+      body:
+        application/json:
+          schema: <<itemSchema>>
+    400:
+      body:
+        application/json:
+          schema: Error
+delete:
+  description: Delete one <<resourcePathName | !singularize>>.
+  responses:
+    204:

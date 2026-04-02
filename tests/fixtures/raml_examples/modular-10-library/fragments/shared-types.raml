@@ -1,0 +1,16 @@
+#%RAML 1.0 Library
+usage: Shared customer-related types.
+
+types:
+  CustomerRef:
+    type: object
+    properties:
+      id: integer
+      email: string
+
+  CustomerBase:
+    type: object
+    properties:
+      id: integer
+      email: string
+      name: string
