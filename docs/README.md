@@ -591,7 +591,7 @@ When validation fails, Flask returns a 400 response:
 ### Parse a RAML File
 
 ```bash
-ramlpy parse api.raml
+ramlpy-ng parse api.raml
 ```
 
 Output:
@@ -610,7 +610,7 @@ Resources:
 ### Parse as JSON
 
 ```bash
-ramlpy parse api.raml --json
+ramlpy-ng parse api.raml --json
 ```
 
 Output:
@@ -626,7 +626,7 @@ Output:
 ### Validate a RAML File
 
 ```bash
-ramlpy validate api.raml
+ramlpy-ng validate api.raml
 ```
 
 Output:

@@ -1,17 +1,17 @@
 # How to use the CLI
 
-This guide shows you how to use the ramlpy command-line interface.
+This guide shows you how to use the ramlpy-ng command-line interface.
 
 ## Basic Usage
 
-The `ramlpy` CLI provides two main commands: `parse` and `validate`.
+The `ramlpy-ng` CLI provides three main commands: `parse`, `validate`, and `info`.
 
 ### Parse a RAML File
 
 To parse a RAML file and display its structure:
 
 ```bash
-ramlpy parse api.raml
+ramlpy-ng parse api.raml
 ```
 
 Output:
@@ -32,7 +32,7 @@ Resources:
 To output the parsed result as JSON:
 
 ```bash
-ramlpy parse api.raml --json
+ramlpy-ng parse api.raml --json
 ```
 
 Output:
@@ -50,7 +50,7 @@ Output:
 To check if a RAML file is valid:
 
 ```bash
-ramlpy validate api.raml
+ramlpy-ng validate api.raml
 ```
 
 Output:
@@ -61,12 +61,40 @@ Version: v1
 Resources: 2
 ```
 
+### Show API Information
+
+To display detailed information about the API:
+
+```bash
+ramlpy-ng info api.raml
+```
+
+Output:
+```
+Title: User Management API
+Version: v1
+Base URI: https://api.example.com/{version}
+Media Type: application/json
+Resources: 2
+  /users
+    - GET
+    - POST
+  /users/{userId}
+    - GET
+Types: User, NewUser
+```
+
+As JSON:
+```bash
+ramlpy-ng info api.raml --json
+```
+
 ## Error Messages
 
 If the RAML file has errors, the CLI will display them:
 
 ```bash
-ramlpy validate invalid.raml
+ramlpy-ng validate invalid.raml
 ```
 
 Output:
@@ -82,7 +110,7 @@ The CLI can be used in shell scripts for CI/CD validation:
 #!/bin/bash
 # validate-raml.sh
 
-ramlpy validate "$1"
+ramlpy-ng validate "$1"
 if [ $? -eq 0 ]; then
     echo "RAML validation passed!"
     exit 0
@@ -102,20 +130,22 @@ Usage:
 To see available commands and options:
 
 ```bash
-ramlpy --help
+ramlpy-ng --help
 ```
 
 Output:
 ```
-usage: ramlpy [-h] {parse,validate} ...
+usage: ramlpy [-h] {parse,validate,info} ...
 
 RAML parser and validator
 
 positional arguments:
-  {parse,validate}  Command to run
-    parse           Parse a RAML file
-    validate        Validate a RAML file
+  {parse,validate,info}
+                        Command to run
+    parse               Parse a RAML file
+    validate            Validate a RAML file
+    info                Show API information
 
 optional arguments:
-  -h, --help        show this help message and exit
+  -h, --help            show this help message and exit
 ```
