@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ramlpy-ng"
-version = "0.1.1"
+version = "0.1.2"
 description = "A modern Python library for parsing and validating RAML 0.8 and 1.0 files"
 readme = "README.md"
 license = "MIT"
