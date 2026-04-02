@@ -1,4 +1,4 @@
-# ramlpy
+# ramlpy-ng
 
 A modern Python library for parsing and validating RAML 0.8 and 1.0 files.
 
@@ -15,19 +15,19 @@ A modern Python library for parsing and validating RAML 0.8 and 1.0 files.
 ## Installation
 
 ```bash
-pip install ramlpy
+pip install ramlpy-ng
 ```
 
 ### With Flask Integration
 
 ```bash
-pip install ramlpy[flask]
+pip install ramlpy-ng[flask]
 ```
 
 ### Development Dependencies
 
 ```bash
-pip install ramlpy[dev]
+pip install ramlpy-ng[dev]
 ```
 
 ## Quick Start
@@ -89,8 +89,8 @@ else:
 ## CLI
 
 ```bash
-ramlpy validate api.raml
-ramlpy info api.raml
+ramlpy-ng validate api.raml
+ramlpy-ng info api.raml
 ```
 
 ## Documentation
