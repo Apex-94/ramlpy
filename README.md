@@ -1,5 +1,9 @@
 # ramlpy-ng
 
+[![PyPI version](https://badge.fury.io/py/ramlpy-ng.svg)](https://badge.fury.io/py/ramlpy-ng)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/ramlpy-ng.svg)](https://pypi.org/project/ramlpy-ng/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/ramlpy-ng.svg)](https://pypi.org/project/ramlpy-ng/)
+
 A modern Python library for parsing and validating RAML 0.8 and 1.0 files.
 
 ## Features
