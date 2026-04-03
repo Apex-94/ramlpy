@@ -4,7 +4,7 @@ import re
 from functools import wraps
 
 try:
-    from flask import request, jsonify, g, Flask
+    from flask import request, jsonify, g, Flask, current_app
     HAS_FLASK = True
 except ImportError:
     HAS_FLASK = False
@@ -140,7 +140,7 @@ class RamlApi(object):
                         return handler(raml_p, method_m, result.data)
                     return view
                 
-                rule = Flask.current_app.add_url_rule(
+                rule = current_app.add_url_rule(
                     flask_path,
                     endpoint=endpoint,
                     view_func=make_view(raml_path, http_method),
