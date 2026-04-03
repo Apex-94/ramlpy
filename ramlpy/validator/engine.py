@@ -1,8 +1,52 @@
 """Main validation engine."""
 
+from ramlpy.path_match import match_raml_path
 from ramlpy.validator.errors import ValidationIssue, ValidationResult
+from ramlpy.validator.media_type import resolve_body_spec
 from ramlpy.validator.scalars import coerce_scalar
 from ramlpy.validator.jsonschema_support import validate_with_jsonschema, HAS_JSONSCHEMA
+
+
+def _header_raw_value(headers, name):
+    """Return header value matching *name* (HTTP headers are case-insensitive)."""
+    if not headers:
+        return None
+    if name in headers:
+        return headers[name]
+    want = name.lower()
+    for key, value in headers.items():
+        if key.lower() == want:
+            return value
+    return None
+
+
+def resolve_route(api_spec, path, method):
+    """Find resource and method for *path*; resolve template match to path param strings.
+
+    Accepts either a RAML template path (e.g. ``/users/{id}``) or a concrete request path
+    (e.g. ``/users/5``).
+
+    Returns:
+        tuple: (ResourceSpec or None, MethodSpec or None, extracted path params dict)
+    """
+    method_l = method.lower()
+    for resource in api_spec.iter_resources():
+        if method_l not in resource.methods:
+            continue
+        if resource.full_path == path:
+            return resource, resource.methods[method_l], {}
+    candidates = []
+    for resource in api_spec.iter_resources():
+        if method_l not in resource.methods:
+            continue
+        matched, extracted = match_raml_path(resource.full_path, path)
+        if matched:
+            candidates.append((len(resource.full_path), resource, extracted))
+    if not candidates:
+        return None, None, {}
+    candidates.sort(key=lambda x: -x[0])
+    _, resource, extracted = candidates[0]
+    return resource, resource.methods[method_l], extracted
 
 
 def _resolve_type_spec(api_spec, type_ref):
@@ -324,18 +368,9 @@ def _validate_body(api_spec, method_spec, body, content_type):
     """
     if body is None:
         return []
-    
-    # Get the body spec for the content type
-    body_spec = None
-    if method_spec.bodies and content_type:
-        body_spec = method_spec.bodies.get(content_type)
-    
-    # Fall back to any body spec if content type doesn't match
-    if body_spec is None and method_spec.bodies:
-        for spec in method_spec.bodies.values():
-            body_spec = spec
-            break
-    
+
+    body_spec = resolve_body_spec(method_spec.bodies, content_type)
+
     if body_spec is None:
         return []
     
@@ -412,28 +447,23 @@ def validate_request(api_spec, path, method, path_params,
     
     Args:
         api_spec: ApiSpec to validate against
-        path: Request path
+        path: RAML resource path (``/users/{id}``) or concrete request path (``/users/5``)
         method: HTTP method
-        path_params: Path parameters dict
+        path_params: Path parameters dict (merged with values parsed from *path* when template matching)
         query_params: Query parameters dict
-        headers: Request headers dict
+        headers: Request headers dict (matched case-insensitively to RAML header names)
         body: Request body
         content_type: Content-Type header value
     
     Returns:
         ValidationResult
     """
-    method = method.lower()
-    target_resource = None
-    target_method = None
-    
-    for resource in api_spec.resources:
-        if resource.full_path == path:
-            target_resource = resource
-            if method in resource.methods:
-                target_method = resource.methods[method]
-            break
-    
+    path_params = path_params or {}
+    query_params = query_params or {}
+    headers = headers or {}
+
+    target_resource, target_method, extracted = resolve_route(api_spec, path, method)
+
     if target_resource is None or target_method is None:
         return ValidationResult(
             ok=False,
@@ -443,7 +473,10 @@ def validate_request(api_spec, path, method, path_params,
                 pointer="request",
             ).as_dict()]
         )
-    
+
+    merged_path_params = dict(extracted)
+    merged_path_params.update(path_params)
+
     errors = []
     validated = {
         "path_params": {},
@@ -454,7 +487,9 @@ def validate_request(api_spec, path, method, path_params,
     
     # Validate path parameters
     for name, spec in target_resource.uri_parameters.items():
-        value, error = validate_parameter(spec, path_params.get(name), "path.%s" % name)
+        value, error = validate_parameter(
+            spec, merged_path_params.get(name), "path.%s" % name
+        )
         if error:
             errors.append(error.as_dict())
         else:
@@ -470,7 +505,9 @@ def validate_request(api_spec, path, method, path_params,
     
     # Validate headers
     for name, spec in target_method.headers.items():
-        value, error = validate_parameter(spec, headers.get(name), "headers.%s" % name)
+        value, error = validate_parameter(
+            spec, _header_raw_value(headers, name), "headers.%s" % name
+        )
         if error:
             errors.append(error.as_dict())
         else:

@@ -127,7 +127,7 @@ class RamlFileRouter(object):
         
         registered = []
         
-        for resource in self.api_spec.resources:
+        for resource in self.api_spec.iter_resources():
             raml_path = resource.full_path
             flask_path = _raml_path_to_flask(raml_path)
             
@@ -183,7 +183,7 @@ class RamlFileRouter(object):
             return []
         
         routes = []
-        for resource in self.api_spec.resources:
+        for resource in self.api_spec.iter_resources():
             raml_path = resource.full_path
             for http_method in resource.methods:
                 handler = self._find_handler(raml_path, http_method.lower())

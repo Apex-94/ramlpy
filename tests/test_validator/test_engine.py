@@ -1,6 +1,5 @@
 """Test validation engine."""
 
-import pytest
 from ramlpy.model.api import ApiSpec
 from ramlpy.model.resource import ResourceSpec
 from ramlpy.model.method import MethodSpec
@@ -91,3 +90,70 @@ def test_validate_request_valid():
     )
     assert result.ok
     assert result.data["path_params"]["id"] == 123
+
+
+def test_validate_request_concrete_path_extracts_params():
+    param = ParameterSpec(name="id", location="path", required=True, type_ref="integer")
+    resource = ResourceSpec(
+        full_path="/users/{id}",
+        uri_parameters={"id": param},
+        methods={"get": MethodSpec(method="get")},
+    )
+    api = ApiSpec(title="Test", version="v1", resources=[resource])
+    result = validate_request(
+        api,
+        path="/users/99",
+        method="get",
+        path_params={},
+        query_params={},
+        headers={},
+        body=None,
+        content_type=None,
+    )
+    assert result.ok
+    assert result.data["path_params"]["id"] == 99
+
+
+def test_validate_request_headers_case_insensitive():
+    resource = ResourceSpec(
+        full_path="/ping",
+        uri_parameters={},
+        methods={
+            "get": MethodSpec(
+                method="get",
+                headers={
+                    "X-Request-Id": ParameterSpec(
+                        name="X-Request-Id",
+                        location="header",
+                        required=True,
+                        type_ref="string",
+                    ),
+                },
+            ),
+        },
+    )
+    api = ApiSpec(title="Test", version="v1", resources=[resource])
+    result = validate_request(
+        api,
+        path="/ping",
+        method="get",
+        path_params={},
+        query_params={},
+        headers={"x-request-id": "abc"},
+        body=None,
+        content_type=None,
+    )
+    assert result.ok
+    assert result.data["headers"]["X-Request-Id"] == "abc"
+
+
+def test_api_spec_nested_resource_lookup():
+    inner = ResourceSpec(full_path="/parent/child", uri_parameters={}, methods={})
+    parent = ResourceSpec(
+        full_path="/parent",
+        uri_parameters={},
+        methods={},
+        nested_resources=[inner],
+    )
+    api = ApiSpec(title="Test", version="v1", resources=[parent])
+    assert api.resource("/parent/child") is inner

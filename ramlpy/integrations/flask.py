@@ -50,19 +50,6 @@ def _raml_path_to_flask(path):
     return re.sub(r'\{(\w+)\}', r'<\1>', path)
 
 
-def _match_raml_path(raml_path, request_path):
-    """Check if a request path matches a RAML path pattern.
-    
-    Returns (matched, path_params) tuple.
-    """
-    pattern = re.sub(r'\{(\w+)\}', r'(?P<\1>[^/]+)', raml_path)
-    pattern = '^' + pattern + '$'
-    m = re.match(pattern, request_path)
-    if m:
-        return True, m.groupdict()
-    return False, {}
-
-
 class RamlApi(object):
     """Flask extension for RAML validation with auto-routing."""
     
@@ -105,7 +92,7 @@ class RamlApi(object):
         methods = set(m.upper() for m in (methods or [])) if methods else None
         rules = []
         
-        for resource in self.api_spec.resources:
+        for resource in self.api_spec.iter_resources():
             raml_path = resource.full_path
             flask_path = _raml_path_to_flask(raml_path)
             

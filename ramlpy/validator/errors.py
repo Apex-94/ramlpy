@@ -33,5 +33,12 @@ class ValidationResult(object):
         self.data = data or {}
         self.errors = errors or []
     
+    def raise_unless_ok(self):
+        """Raise :class:`~ramlpy.exceptions.RamlValidationError` if validation failed."""
+        if self.ok:
+            return
+        from ramlpy.exceptions import RamlValidationError
+        raise RamlValidationError("Request validation failed", errors=self.errors)
+    
     def __repr__(self):
         return "ValidationResult(ok=%r, errors=%d)" % (self.ok, len(self.errors))

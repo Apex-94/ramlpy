@@ -11,8 +11,8 @@ from ramlpy.exceptions import RamlError
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        prog='ramlpy',
-        description='RAML parser and validator',
+        prog="ramlpy-ng",
+        description="RAML parser and validator",
     )
     subparsers = parser.add_subparsers(dest='command', help='Command to run')
     
@@ -52,7 +52,7 @@ def cmd_parse(args):
                 'title': api.title,
                 'version': api.version,
                 'base_uri': api.base_uri,
-                'resources': [r.full_path for r in api.resources],
+                'resources': [r.full_path for r in api.iter_resources()],
             }
             print(json.dumps(output, indent=2))
         else:
@@ -60,7 +60,7 @@ def cmd_parse(args):
             print("Version: %s" % api.version)
             print("Base URI: %s" % api.base_uri)
             print("Resources:")
-            for resource in api.resources:
+            for resource in api.iter_resources():
                 print("  %s" % resource.full_path)
                 for method_name in resource.methods:
                     print("    - %s" % method_name.upper())
@@ -76,7 +76,7 @@ def cmd_validate(args):
         print("RAML file is valid.")
         print("Title: %s" % api.title)
         print("Version: %s" % api.version)
-        print("Resources: %d" % len(api.resources))
+        print("Resources: %d" % len(list(api.iter_resources())))
     except RamlError as e:
         print("Validation failed: %s" % e, file=sys.stderr)
         sys.exit(1)
@@ -92,7 +92,7 @@ def cmd_info(args):
                 'version': api.version,
                 'base_uri': api.base_uri,
                 'media_type': api.media_type,
-                'resources': [r.full_path for r in api.resources],
+                'resources': [r.full_path for r in api.iter_resources()],
                 'types': list(api.types.keys()),
             }
             print(json.dumps(output, indent=2))
@@ -101,8 +101,8 @@ def cmd_info(args):
             print("Version: %s" % api.version)
             print("Base URI: %s" % api.base_uri)
             print("Media Type: %s" % api.media_type)
-            print("Resources: %d" % len(api.resources))
-            for resource in api.resources:
+            print("Resources: %d" % len(list(api.iter_resources())))
+            for resource in api.iter_resources():
                 print("  %s" % resource.full_path)
                 for method_name in resource.methods:
                     print("    - %s" % method_name.upper())
