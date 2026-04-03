@@ -1,0 +1,80 @@
+#%RAML 1.0
+title: Order Management API
+version: v1
+baseUri: https://api.example.com/{version}
+mediaType: application/json
+
+types:
+  Address:
+    type: object
+    properties:
+      street:
+        type: string
+        minLength: 5
+        maxLength: 100
+      city:
+        type: string
+        minLength: 2
+      zipCode:
+        type: string
+        pattern: "^[0-9]{5}$"
+      country:
+        type: string
+        enum: [US, CA, UK, DE, FR]
+
+  OrderItem:
+    type: object
+    properties:
+      productId:
+        type: integer
+        minimum: 1
+      quantity:
+        type: integer
+        minimum: 1
+        maximum: 100
+      unitPrice:
+        type: number
+        minimum: 0.01
+        maximum: 99999.99
+      discount:
+        type: number
+        minimum: 0
+        maximum: 100
+        default: 0
+
+  Order:
+    type: object
+    properties:
+      customerId:
+        type: integer
+        minimum: 1
+      priority:
+        type: boolean
+        default: false
+      items:
+        type: array
+        items: OrderItem
+        minItems: 1
+        maxItems: 50
+      shippingAddress:
+        type: Address
+      billingAddress:
+        type: Address
+      totalAmount:
+        type: number
+        minimum: 0
+      notes:
+        type: string
+        maxLength: 500
+
+/orders:
+  post:
+    description: Create a new order
+    body:
+      application/json:
+        type: Order
+    responses:
+      201:
+        description: Order created successfully
+      400:
+        description: Invalid order data

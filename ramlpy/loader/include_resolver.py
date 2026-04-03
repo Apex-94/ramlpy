@@ -54,13 +54,13 @@ class IncludeResolver(object):
         """
         from ramlpy.loader.source import Source
         
-        path = os.path.abspath(source)
+        path = os.path.abspath(os.fspath(source))
         if not os.path.exists(path):
             raise IncludeResolutionError(
                 "Cannot resolve include: %s" % path, path=path
             )
         
-        with open(path, 'r') as f:
+        with open(path, "r", encoding="utf-8") as f:
             content = f.read()
         
         src = Source(content, path=path)
@@ -79,7 +79,8 @@ class IncludeResolver(object):
         """
         bp = base_path or self.base_path
         if bp:
-            dummy_path = os.path.join(bp, 'dummy.raml')
+            bp = os.fspath(bp)
+            dummy_path = os.path.join(bp, "dummy.raml")
         else:
             dummy_path = 'dummy.raml'
         raw = self._load_raw_yaml(text, dummy_path)

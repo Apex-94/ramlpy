@@ -19,6 +19,20 @@ class ApiSpec(object):
         self.security_schemes = security_schemes or {}
         self.metadata = metadata or {}
     
+    def iter_resources(self):
+        """Yield every resource in document order, including nested resources."""
+        for resource in self.resources:
+            yield resource
+            for nested in self._iter_nested_resources(resource):
+                yield nested
+    
+    @staticmethod
+    def _iter_nested_resources(resource):
+        for child in resource.nested_resources:
+            yield child
+            for nested in ApiSpec._iter_nested_resources(child):
+                yield nested
+    
     def resource(self, path):
         """Get a resource by its full path.
         
@@ -31,7 +45,7 @@ class ApiSpec(object):
         Raises:
             KeyError: If no resource exists at the given path
         """
-        for resource in self.resources:
+        for resource in self.iter_resources():
             if resource.full_path == path:
                 return resource
         raise KeyError("Resource not found: %s" % path)
@@ -64,6 +78,16 @@ class ApiSpec(object):
             body=body,
             content_type=content_type,
         )
+    
+    def match_route(self, path, method):
+        """Resolve RAML resource and method for a path (template or concrete URL).
+        
+        Returns:
+            tuple: (ResourceSpec, MethodSpec, extracted path param strings) if a route
+            matches, or ``(None, None, {})`` if none match.
+        """
+        from ramlpy.validator.engine import resolve_route
+        return resolve_route(self, path, method)
     
     def __repr__(self):
         return "ApiSpec(title=%r, version=%r, base_uri=%r)" % (
