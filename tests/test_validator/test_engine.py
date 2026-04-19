@@ -1,11 +1,10 @@
 """Test validation engine."""
 
-import pytest
 from ramlpy.model.api import ApiSpec
 from ramlpy.model.resource import ResourceSpec
 from ramlpy.model.method import MethodSpec
 from ramlpy.model.parameters import ParameterSpec
-from ramlpy.validator.engine import validate_request, validate_parameter
+from ramlpy.validator.engine import validate_parameter
 
 
 def test_validate_parameter_required_missing():
@@ -53,24 +52,16 @@ def test_validate_parameter_enum_invalid():
     assert error.code == "invalid_enum"
 
 
-def test_validate_request_route_not_found():
+def test_validator_for_route_not_found():
     api = ApiSpec(title="Test", version="v1", resources=[])
-    result = validate_request(
-        api,
-        path="/users",
-        method="get",
-        path_params={},
-        query_params={},
-        headers={},
-        body=None,
-        content_type=None,
-    )
-    assert not result.ok
-    assert len(result.errors) == 1
-    assert result.errors[0]["code"] == "route_not_found"
+    try:
+        api.validator_for("/users", "get")
+        assert False, "Expected KeyError for missing route"
+    except KeyError:
+        pass
 
 
-def test_validate_request_valid():
+def test_route_validator_valid():
     param = ParameterSpec(name="id", location="path", required=True, type_ref="integer")
     resource = ResourceSpec(
         full_path="/users/{id}",
@@ -78,16 +69,61 @@ def test_validate_request_valid():
         methods={"get": MethodSpec(method="get")},
     )
     api = ApiSpec(title="Test", version="v1", resources=[resource])
-    
-    result = validate_request(
-        api,
-        path="/users/{id}",
-        method="get",
-        path_params={"id": "123"},
-        query_params={},
-        headers={},
-        body=None,
-        content_type=None,
+
+    result = api.validator_for("/users/{id}", "get").validate(
+        path_params={"id": "123"}
     )
     assert result.ok
     assert result.data["path_params"]["id"] == 123
+
+
+def test_api_match_route_concrete_path_extracts_params():
+    param = ParameterSpec(name="id", location="path", required=True, type_ref="integer")
+    resource = ResourceSpec(
+        full_path="/users/{id}",
+        uri_parameters={"id": param},
+        methods={"get": MethodSpec(method="get")},
+    )
+    api = ApiSpec(title="Test", version="v1", resources=[resource])
+    resource_match, method_match, extracted = api.match_route("/users/99", "get")
+    assert resource_match is resource
+    assert method_match.method == "get"
+    assert extracted["id"] == "99"
+
+
+def test_route_validator_headers_case_insensitive():
+    resource = ResourceSpec(
+        full_path="/ping",
+        uri_parameters={},
+        methods={
+            "get": MethodSpec(
+                method="get",
+                headers={
+                    "X-Request-Id": ParameterSpec(
+                        name="X-Request-Id",
+                        location="header",
+                        required=True,
+                        type_ref="string",
+                    ),
+                },
+            ),
+        },
+    )
+    api = ApiSpec(title="Test", version="v1", resources=[resource])
+    result = api.validator_for("/ping", "get").validate(
+        headers={"x-request-id": "abc"}
+    )
+    assert result.ok
+    assert result.data["headers"]["X-Request-Id"] == "abc"
+
+
+def test_api_spec_nested_resource_lookup():
+    inner = ResourceSpec(full_path="/parent/child", uri_parameters={}, methods={})
+    parent = ResourceSpec(
+        full_path="/parent",
+        uri_parameters={},
+        methods={},
+        nested_resources=[inner],
+    )
+    api = ApiSpec(title="Test", version="v1", resources=[parent])
+    assert api.resource("/parent/child") is inner

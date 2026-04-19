@@ -72,27 +72,15 @@ class TestSimple08:
         assert "NewUser" in api.types
     
     def test_validate_users_list_request(self, api):
-        result = api.validate_request(
-            path="/users",
-            method="get",
-            path_params={},
+        result = api.validator_for("/users", "get").validate(
             query_params={"limit": "50"},
-            headers={},
-            body=None,
-            content_type=None,
         )
         assert result.ok
         assert result.data["query_params"]["limit"] == 50
     
     def test_validate_users_list_invalid_limit(self, api):
-        result = api.validate_request(
-            path="/users",
-            method="get",
-            path_params={},
+        result = api.validator_for("/users", "get").validate(
             query_params={"limit": "abc"},
-            headers={},
-            body=None,
-            content_type=None,
         )
         assert not result.ok
         assert any(e["code"] == "invalid_type" for e in result.errors)
@@ -147,14 +135,8 @@ class TestSimple10Inline:
         assert "limit" in method.query_parameters
     
     def test_validate_products_list_request(self, api):
-        result = api.validate_request(
-            path="/products",
-            method="get",
-            path_params={},
+        result = api.validator_for("/products", "get").validate(
             query_params={"limit": "20"},
-            headers={},
-            body=None,
-            content_type=None,
         )
         assert result.ok
         assert result.data["query_params"]["limit"] == 20
@@ -189,14 +171,8 @@ class TestSimple10WithTypes:
         assert "get" in resource.methods
     
     def test_validate_customers_list_request(self, api):
-        result = api.validate_request(
-            path="/customers",
-            method="get",
-            path_params={},
+        result = api.validator_for("/customers", "get").validate(
             query_params={"email": "test@example.com"},
-            headers={},
-            body=None,
-            content_type=None,
         )
         assert result.ok
 

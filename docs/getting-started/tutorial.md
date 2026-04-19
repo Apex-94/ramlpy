@@ -1,21 +1,18 @@
 # Tutorial: Building a Validated API
 
-In this tutorial, we'll build a complete Flask API with RAML-based request validation. By the end, you'll understand how to:
+This tutorial shows how to use ramlpy as a framework-agnostic validation layer. The handler examples are plain Python so you can adapt them to Flask, FastAPI, Django, aiohttp, serverless handlers, or your own request pipeline.
 
-- Define a RAML API specification
-- Parse the specification with ramlpy
-- Validate incoming requests against the spec
-- Return structured error responses
+By the end, you will:
 
-## Prerequisites
-
-- Python 3.6 or later
-- Basic familiarity with Flask
-- Basic understanding of RAML
+- define a RAML API
+- parse it with ramlpy
+- create reusable route validators
+- validate handler inputs
+- return structured error responses
 
 ## Step 1: Define the API
 
-First, let's create a RAML file that describes our API. Create a file called `api.raml`:
+Create `api.raml`:
 
 ```raml
 #%RAML 1.0
@@ -44,21 +41,8 @@ types:
         type: string
         enum: [admin, user, guest]
 
-  ErrorResponse:
-    type: object
-    properties:
-      errors:
-        type: array
-        items:
-          type: object
-          properties:
-            code: string
-            message: string
-            pointer: string
-
 /users:
   get:
-    description: List all users
     queryParameters:
       limit?:
         type: integer
@@ -72,22 +56,11 @@ types:
       role?:
         type: string
         enum: [admin, user, guest]
-    responses:
-      200:
-        body:
-          application/json:
-            type: User[]
 
   post:
-    description: Create a new user
     body:
       application/json:
         type: UserCreateRequest
-    responses:
-      201:
-        body:
-          application/json:
-            type: User
 
 /users/{userId}:
   uriParameters:
@@ -95,151 +68,132 @@ types:
       type: integer
       minimum: 1
   get:
-    description: Get a user by ID
     responses:
       200:
         body:
           application/json:
             type: User
-      404:
-        body:
-          application/json:
-            type: ErrorResponse
 ```
 
-## Step 2: Set Up the Flask App
+## Step 2: Parse the RAML and Build Validators
 
-Create a new file called `app.py`:
+Create `app_logic.py`:
 
 ```python
-from flask import Flask, request, jsonify
 from ramlpy import parse
-from ramlpy.integrations.flask import validate_with_raml
 
-app = Flask(__name__)
-
-# Parse the RAML specification
 api = parse("api.raml")
 
-# In-memory user store for demonstration
+list_users_validator = api.validator_for("/users", "get")
+create_user_validator = api.validator_for("/users", "post")
+get_user_validator = api.validator_for("/users/{userId}", "get")
+
 USERS = [
     {"id": 1, "name": "Alice", "email": "alice@example.com", "role": "admin"},
     {"id": 2, "name": "Bob", "email": "bob@example.com", "role": "user"},
 ]
+```
 
-@app.route("/users", methods=["GET"])
-@validate_with_raml(api, path="/users", method="get")
-def list_users():
-    """List all users with optional filtering."""
-    validated = request.raml.validated
-    query_params = validated["query_params"]
-    
-    # Apply filters
+## Step 3: Use Validators Inside Handlers
+
+These handlers accept already-parsed input values. Your framework can extract path params, query params, headers, and JSON body in whatever way it prefers.
+
+```python
+def list_users_handler(query_params, headers=None):
+    validated = list_users_validator.validate_or_raise(
+        query_params=query_params,
+        headers=headers or {},
+    )
+    query = validated["query_params"]
+
     users = USERS[:]
-    if "role" in query_params:
-        users = [u for u in users if u["role"] == query_params["role"]]
-    
-    # Apply pagination
-    offset = query_params.get("offset", 0)
-    limit = query_params.get("limit", 20)
-    users = users[offset:offset + limit]
-    
-    return jsonify(users)
+    if "role" in query:
+        users = [u for u in users if u["role"] == query["role"]]
 
-@app.route("/users", methods=["POST"])
-@validate_with_raml(api, path="/users", method="post")
-def create_user():
-    """Create a new user."""
-    validated = request.raml.validated
-    body = validated["body"]
-    
-    # Create new user
+    offset = query.get("offset", 0)
+    limit = query.get("limit", 20)
+    return {"status": 200, "body": users[offset:offset + limit]}
+
+
+def create_user_handler(body, headers=None):
+    validated = create_user_validator.validate_or_raise(
+        body=body,
+        headers=headers or {},
+        content_type="application/json",
+    )
+    payload = validated["body"]
+
     new_id = max(u["id"] for u in USERS) + 1 if USERS else 1
     new_user = {
         "id": new_id,
-        "name": body["name"],
-        "email": body["email"],
-        "role": body.get("role", "user"),
+        "name": payload["name"],
+        "email": payload["email"],
+        "role": payload.get("role", "user"),
     }
     USERS.append(new_user)
-    
-    return jsonify(new_user), 201
+    return {"status": 201, "body": new_user}
 
-@app.route("/users/<int:user_id>", methods=["GET"])
-@validate_with_raml(api, path="/users/{userId}", method="get")
-def get_user(user_id):
-    """Get a user by ID."""
-    validated = request.raml.validated
+
+def get_user_handler(path_params):
+    validated = get_user_validator.validate_or_raise(path_params=path_params)
     user_id = validated["path_params"]["userId"]
-    
+
     user = next((u for u in USERS if u["id"] == user_id), None)
     if user is None:
-        return jsonify({"errors": [{"code": "not_found", "message": "User not found"}]}), 404
-    
-    return jsonify(user)
-
-if __name__ == "__main__":
-    app.run(debug=True)
+        return {
+            "status": 404,
+            "body": {"errors": [{"code": "not_found", "message": "User not found"}]},
+        }
+    return {"status": 200, "body": user}
 ```
 
-## Step 3: Run the App
+## Step 4: Wrap Validation Errors
 
-```bash
-pip install flask ramlpy
-python app.py
+`validate_or_raise(...)` raises `RamlValidationError`. Catch that at your framework boundary and format a response once.
+
+```python
+from ramlpy.exceptions import RamlValidationError
+
+
+def run_handler(handler, **kwargs):
+    try:
+        return handler(**kwargs)
+    except RamlValidationError as exc:
+        return {
+            "status": 400,
+            "body": {
+                "errors": exc.errors,
+            },
+        }
 ```
 
-## Step 4: Test the API
+## Step 5: Try Example Calls
 
-### Valid Request
-
-```bash
-# List users with pagination
-curl "http://localhost:5000/users?limit=10&offset=0"
-
-# Create a new user
-curl -X POST http://localhost:5000/users \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Charlie", "email": "charlie@example.com"}'
-
-# Get a user by ID
-curl http://localhost:5000/users/1
+```python
+print(run_handler(list_users_handler, query_params={"limit": "1"}))
+print(run_handler(create_user_handler, body={"name": "Charlie", "email": "charlie@example.com"}))
+print(run_handler(get_user_handler, path_params={"userId": "1"}))
 ```
 
-### Invalid Request
+Invalid input produces structured validation errors:
 
-```bash
-# Invalid limit (not a number)
-curl "http://localhost:5000/users?limit=abc"
-# Returns: {"errors": [{"code": "invalid_type", "message": "Parameter 'limit' is not a valid integer", ...}]}
-
-# Invalid role (not in enum)
-curl "http://localhost:5000/users?role=superadmin"
-# Returns: {"errors": [{"code": "invalid_enum", "message": "Parameter 'role' must be one of ['admin', 'user', 'guest']", ...}]}
-
-# Missing required body field
-curl -X POST http://localhost:5000/users \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Charlie"}'
-# Returns: {"errors": [{"code": "missing_required_property", ...}]}
+```python
+print(run_handler(list_users_handler, query_params={"limit": "abc"}))
+print(run_handler(create_user_handler, body={"name": "Charlie"}))
 ```
 
-## Step 5: Understanding the Validation Flow
+## Step 6: Integration Pattern
 
-Here's what happens when a request comes in:
+No matter which framework you use, the pattern is the same:
 
-1. Flask receives the request and routes it to the appropriate view function
-2. The `@validate_with_raml` decorator intercepts the request
-3. ramlpy validates the request against the RAML specification:
-   - Path parameters are validated and coerced (e.g., `userId` to integer)
-   - Query parameters are validated and coerced (e.g., `limit` to integer)
-   - Headers are validated (e.g., `Content-Type`)
-   - Request body is validated against the schema
-4. If validation fails, a 400 response is returned with error details
-5. If validation passes, the validated data is attached to `request.raml.validated`
+1. Parse the RAML file once at startup.
+2. Build route validators once with `api.validator_for(...)`.
+3. Let the framework parse the incoming request.
+4. Pass parsed values into `validate(...)` or `validate_or_raise(...)`.
+5. Use the coerced values from the returned data.
 
 ## Next Steps
 
-- Learn how to [handle validation errors](../how-to/handle-errors.md)
-- Explore [RAML includes](../how-to/use-includes.md) for larger APIs
-- See the [Flask integration guide](../how-to/flask-integration.md) for more options
+- [How to handle validation errors](../how-to/handle-errors.md)
+- [How to validate request parameters](../how-to/validate-parameters.md)
+- [How to validate request bodies](../how-to/validate-bodies.md)

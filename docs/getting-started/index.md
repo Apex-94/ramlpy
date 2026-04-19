@@ -16,7 +16,7 @@ Get up and running in minutes with basic parsing and validation examples.
 
 ## Tutorial: Building a Validated API
 
-Follow a step-by-step tutorial to build a complete Flask API with RAML-based request validation.
+Follow a step-by-step tutorial to build a complete framework-agnostic API validation layer with RAML-based request validation.
 
 - [Tutorial](tutorial.md)
 

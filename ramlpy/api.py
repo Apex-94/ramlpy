@@ -1,5 +1,7 @@
 """Public API for parsing RAML files."""
 
+import os
+
 from ramlpy.loader.version import detect_raml_version
 from ramlpy.loader.include_resolver import IncludeResolver
 from ramlpy.parser.parser08 import Raml08Parser
@@ -13,7 +15,7 @@ def parse(path):
     """Parse a RAML file and return an ApiSpec.
     
     Args:
-        path: Path to RAML file
+        path: Path to RAML file (str or os.PathLike)
     
     Returns:
         ApiSpec: Normalized API specification
@@ -22,6 +24,7 @@ def parse(path):
         RamlVersionError: If RAML version is unsupported
         RamlParseError: If file cannot be parsed
     """
+    path = os.fspath(path)
     resolver = IncludeResolver(base_path=None)
     content, source = resolver.resolve(path)
     version = detect_raml_version(source.content)
@@ -41,7 +44,7 @@ def parse_string(text, base_path=None):
     
     Args:
         text: RAML content as string
-        base_path: Base path for resolving includes
+        base_path: Base path for resolving includes (str or os.PathLike)
     
     Returns:
         ApiSpec: Normalized API specification
@@ -50,6 +53,8 @@ def parse_string(text, base_path=None):
         RamlVersionError: If RAML version is unsupported
         RamlParseError: If text cannot be parsed
     """
+    if base_path is not None:
+        base_path = os.fspath(base_path)
     version = detect_raml_version(text)
     if version == "0.8":
         ast = Raml08Parser(base_path=base_path).parse(text)

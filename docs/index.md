@@ -1,6 +1,6 @@
 # ramlpy Documentation
 
-Welcome to the ramlpy documentation! ramlpy is a modern Python library for parsing and validating RAML 0.8 and 1.0 files, designed for Flask-based REST API integrations.
+Welcome to the ramlpy documentation! ramlpy is a modern Python library for parsing and validating RAML 0.8 and 1.0 files, designed for framework-agnostic REST API tooling.
 
 ## Getting Help
 
@@ -27,7 +27,6 @@ Practical guides that show you how to solve specific problems.
 - [How to validate request parameters](how-to/validate-parameters.md)
 - [How to validate request bodies](how-to/validate-bodies.md)
 - [How to use RAML includes](how-to/use-includes.md)
-- [How to integrate with Flask](how-to/flask-integration.md)
 - [How to handle validation errors](how-to/handle-errors.md)
 - [How to use the CLI](how-to/use-cli.md)
 
@@ -70,9 +69,10 @@ This includes tests for:
 - RAML examples fixtures (35 tests)
 - Validation engine (12 tests)
 - Scalar coercion (6 tests)
+- Additional validation and parser coverage introduced after the original summary
 
 ## Version Information
 
-- **Current version**: 0.1.0
+- **Current version**: 0.1.3
 - **Python support**: 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14
 - **RAML support**: 0.8, 1.0

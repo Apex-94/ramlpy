@@ -6,8 +6,8 @@ Practical guides that show you how to solve specific problems with ramlpy.
 
 - [How to validate request parameters](validate-parameters.md)
 - [How to validate request bodies](validate-bodies.md)
+- [How to integrate with your framework](flask-integration.md)
 - [How to use RAML includes](use-includes.md)
-- [How to integrate with Flask](flask-integration.md)
 - [How to handle validation errors](handle-errors.md)
 - [How to use the CLI](use-cli.md)
 

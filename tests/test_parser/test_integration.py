@@ -23,6 +23,14 @@ def test_parse_raml10(raml10_fixture_path):
     assert "User" in api.types
 
 
+def test_parse_accepts_pathlib_path(raml10_fixture_path):
+    """parse() should accept os.PathLike paths."""
+    from pathlib import Path
+
+    api = parse(Path(raml10_fixture_path))
+    assert api.title == "Simple API"
+
+
 def test_parse_string_raml08(raml08_fixture):
     """Test parsing RAML 0.8 from string."""
     api = parse_string(raml08_fixture)
@@ -49,14 +57,8 @@ def test_resource_access(raml08_fixture_path):
 def test_validation_result(raml08_fixture_path):
     """Test validation result structure."""
     api = parse(raml08_fixture_path)
-    result = api.validate_request(
-        path="/users",
-        method="get",
-        path_params={},
+    result = api.validator_for("/users", "get").validate(
         query_params={"limit": "10"},
-        headers={},
-        body=None,
-        content_type=None,
     )
     assert result.ok
     assert result.data["query_params"]["limit"] == 10

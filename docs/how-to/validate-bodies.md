@@ -1,10 +1,10 @@
 # How to validate request bodies
 
-This guide shows you how to validate request bodies using ramlpy.
+This guide shows how to validate request bodies with route-scoped validators.
 
 ## JSON Body Validation
 
-RAML 1.0 allows you to define the expected body structure using types:
+RAML 1.0 lets you describe request bodies with named types:
 
 ```raml
 #%RAML 1.0
@@ -29,26 +29,20 @@ types:
       role?:
         type: string
         enum: [admin, user, guest]
-        default: user
 
 /users:
   post:
     body:
       application/json:
         type: UserCreateRequest
-    responses:
-      201:
-        body:
-          application/json:
-            type: User
 ```
 
 Validation:
 
 ```python
-result = api.validate_request(
-    path="/users",
-    method="post",
+validator = api.validator_for("/users", "post")
+
+result = validator.validate(
     body={
         "name": "Alice",
         "email": "alice@example.com",
@@ -59,12 +53,24 @@ result = api.validate_request(
 
 if result.ok:
     validated_body = result.data["body"]
-    # Use the validated body
+```
+
+## Strict Body Validation
+
+```python
+validator = api.validator_for("/users", "post")
+payload = validator.validate_body_or_raise(
+    {
+        "name": "Alice",
+        "email": "alice@example.com",
+    },
+    content_type="application/json",
+)
 ```
 
 ## RAML 0.8 Schema Validation
 
-In RAML 0.8, you use JSON Schema directly:
+In RAML 0.8, request bodies can point to JSON Schema definitions:
 
 ```raml
 #%RAML 0.8
@@ -91,69 +97,13 @@ schemas:
         schema: UserCreate
 ```
 
-## Required vs Optional Properties
+The same `validator.validate(...)` and `validator.validate_body_or_raise(...)` APIs work for both RAML 0.8 and RAML 1.0.
 
-In RAML 1.0, use `?` suffix for optional properties:
-
-```raml
-types:
-  UserCreateRequest:
-    type: object
-    properties:
-      name: string       # Required
-      email: string      # Required
-      age?: integer      # Optional
-      role?: string      # Optional
-```
-
-## Nested Objects
-
-You can define nested object structures:
-
-```raml
-types:
-  Address:
-    type: object
-    properties:
-      street: string
-      city: string
-      country: string
-      zipCode: string
-
-  UserCreateRequest:
-    type: object
-    properties:
-      name: string
-      email: string
-      address: Address
-```
-
-## Arrays
-
-Define array types for lists of items:
-
-```raml
-types:
-  Tag:
-    type: string
-    minLength: 1
-
-  UserCreateRequest:
-    type: object
-    properties:
-      name: string
-      tags: Tag[]
-```
-
-## Handling Validation Errors
-
-When the body doesn't match the expected structure:
+## Handling Invalid Bodies
 
 ```python
-result = api.validate_request(
-    path="/users",
-    method="post",
-    body={"name": 123},  # name should be string
+result = validator.validate(
+    body={"name": 123},
     content_type="application/json",
 )
 

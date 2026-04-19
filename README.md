@@ -10,9 +10,8 @@ A modern Python library for parsing and validating RAML 0.8 and 1.0 files.
 
 - **Dual version support**: Parse both RAML 0.8 and 1.0 files
 - **Normalized internal model**: Both versions compile into a shared object model
-- **Request validation**: Validate path, query, header, and body inputs
+- **Route-scoped validation**: Build reusable validators for body, path, query, and header inputs
 - **Type coercion**: Automatically coerce validated values into Python types
-- **Flask integration**: Easy-to-use decorators for request validation
 - **Developer-friendly errors**: Structured validation error reports
 - **Python 3.6+ support**: Works with Python 3.6 through 3.14+
 
@@ -20,12 +19,6 @@ A modern Python library for parsing and validating RAML 0.8 and 1.0 files.
 
 ```bash
 pip install ramlpy-ng
-```
-
-### With Flask Integration
-
-```bash
-pip install ramlpy-ng[flask]
 ```
 
 ### Development Dependencies
@@ -70,17 +63,13 @@ version: v1
 api = parse_string(raml_text)
 ```
 
-### Validating a Request
+### Building A Route Validator
 
 ```python
-result = api.validate_request(
-    path="/users",
-    method="GET",
-    path_params={},
+validator = api.validator_for("/users", "GET")
+result = validator.validate(
     query_params={"limit": "50"},
     headers={"Accept": "application/json"},
-    body=None,
-    content_type=None,
 )
 
 if result.ok:

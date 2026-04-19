@@ -19,6 +19,20 @@ class ApiSpec(object):
         self.security_schemes = security_schemes or {}
         self.metadata = metadata or {}
     
+    def iter_resources(self):
+        """Yield every resource in document order, including nested resources."""
+        for resource in self.resources:
+            yield resource
+            for nested in self._iter_nested_resources(resource):
+                yield nested
+    
+    @staticmethod
+    def _iter_nested_resources(resource):
+        for child in resource.nested_resources:
+            yield child
+            for nested in ApiSpec._iter_nested_resources(child):
+                yield nested
+    
     def resource(self, path):
         """Get a resource by its full path.
         
@@ -31,39 +45,40 @@ class ApiSpec(object):
         Raises:
             KeyError: If no resource exists at the given path
         """
-        for resource in self.resources:
+        for resource in self.iter_resources():
             if resource.full_path == path:
                 return resource
         raise KeyError("Resource not found: %s" % path)
-    
-    def validate_request(self, path, method, path_params=None,
-                         query_params=None, headers=None, body=None,
-                         content_type=None):
-        """Validate an incoming request against this API spec.
-        
+
+    def validator_for(self, path, method):
+        """Create a reusable validator for a specific RAML route and method.
+
         Args:
-            path: Request path
+            path: RAML resource path template, e.g. ``/users/{id}``
             method: HTTP method
-            path_params: Path parameters dict
-            query_params: Query parameters dict
-            headers: Request headers dict
-            body: Request body
-            content_type: Content-Type header value
+
+        Returns:
+            RouteValidator
+
+        Raises:
+            KeyError: If the route or method is not present in the API spec
+        """
+        resource = self.resource(path)
+        method_spec = resource.methods.get(method.lower())
+        if method_spec is None:
+            raise KeyError("Method not found for route %s: %s" % (path, method))
+        from ramlpy.validator.engine import RouteValidator
+        return RouteValidator(self, resource, method_spec)
+    
+    def match_route(self, path, method):
+        """Resolve RAML resource and method for a path (template or concrete URL).
         
         Returns:
-            ValidationResult: The validation result
+            tuple: (ResourceSpec, MethodSpec, extracted path param strings) if a route
+            matches, or ``(None, None, {})`` if none match.
         """
-        from ramlpy.validator.engine import validate_request
-        return validate_request(
-            self,
-            path=path,
-            method=method,
-            path_params=path_params or {},
-            query_params=query_params or {},
-            headers=headers or {},
-            body=body,
-            content_type=content_type,
-        )
+        from ramlpy.validator.engine import resolve_route
+        return resolve_route(self, path, method)
     
     def __repr__(self):
         return "ApiSpec(title=%r, version=%r, base_uri=%r)" % (
