@@ -73,6 +73,6 @@ This includes tests for:
 
 ## Version Information
 
-- **Current version**: 0.1.0
+- **Current version**: 0.1.3
 - **Python support**: 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14
 - **RAML support**: 0.8, 1.0

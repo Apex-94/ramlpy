@@ -17,9 +17,9 @@ if _distribution_version is not None:
     try:
         __version__ = _distribution_version("ramlpy-ng")
     except Exception:
-        __version__ = "0.1.2"
+        __version__ = "0.1.3"
 else:
-    __version__ = "0.1.2"
+    __version__ = "0.1.3"
 __all__ = [
     "__version__",
     "parse",

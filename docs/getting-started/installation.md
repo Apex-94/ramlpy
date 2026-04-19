@@ -53,7 +53,7 @@ To verify that ramlpy is installed correctly:
 ```python
 >>> import ramlpy
 >>> ramlpy.__version__
-'0.1.0'
+'0.1.3'
 ```
 
 ## Troubleshooting
