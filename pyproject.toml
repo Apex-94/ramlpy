@@ -35,11 +35,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-flask = ["Flask>=1.0"]
 dev = [
     "pytest>=6.0",
     "pytest-cov>=2.0",
-    "pytest-flask>=1.0",
     "flake8>=3.0",
 ]
 

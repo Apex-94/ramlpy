@@ -5,7 +5,6 @@ from ramlpy.model.bodies import BodySpec
 from ramlpy.model.method import MethodSpec
 from ramlpy.model.resource import ResourceSpec
 from ramlpy.model.types import TypeSpec
-from ramlpy.validator.engine import validate_request
 from ramlpy.validator.media_type import normalize_media_type, resolve_body_spec
 
 
@@ -21,7 +20,7 @@ def test_resolve_body_spec_matches_charset_suffix():
     assert resolve_body_spec(bodies, "application/json; charset=utf-8") is bodies["application/json"]
 
 
-def test_validate_request_body_with_charset_in_content_type():
+def test_route_validator_body_with_charset_in_content_type():
     schema = {
         "type": "object",
         "required": ["name"],
@@ -51,13 +50,7 @@ def test_validate_request_body_with_charset_in_content_type():
             "Payload": TypeSpec(name="Payload", schema_source=schema),
         },
     )
-    result = validate_request(
-        api,
-        path="/items",
-        method="post",
-        path_params={},
-        query_params={},
-        headers={},
+    result = api.validator_for("/items", "post").validate(
         body={"name": "ok"},
         content_type="application/json; charset=utf-8",
     )

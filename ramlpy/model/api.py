@@ -49,35 +49,26 @@ class ApiSpec(object):
             if resource.full_path == path:
                 return resource
         raise KeyError("Resource not found: %s" % path)
-    
-    def validate_request(self, path, method, path_params=None,
-                         query_params=None, headers=None, body=None,
-                         content_type=None):
-        """Validate an incoming request against this API spec.
-        
+
+    def validator_for(self, path, method):
+        """Create a reusable validator for a specific RAML route and method.
+
         Args:
-            path: Request path
+            path: RAML resource path template, e.g. ``/users/{id}``
             method: HTTP method
-            path_params: Path parameters dict
-            query_params: Query parameters dict
-            headers: Request headers dict
-            body: Request body
-            content_type: Content-Type header value
-        
+
         Returns:
-            ValidationResult: The validation result
+            RouteValidator
+
+        Raises:
+            KeyError: If the route or method is not present in the API spec
         """
-        from ramlpy.validator.engine import validate_request
-        return validate_request(
-            self,
-            path=path,
-            method=method,
-            path_params=path_params or {},
-            query_params=query_params or {},
-            headers=headers or {},
-            body=body,
-            content_type=content_type,
-        )
+        resource = self.resource(path)
+        method_spec = resource.methods.get(method.lower())
+        if method_spec is None:
+            raise KeyError("Method not found for route %s: %s" % (path, method))
+        from ramlpy.validator.engine import RouteValidator
+        return RouteValidator(self, resource, method_spec)
     
     def match_route(self, path, method):
         """Resolve RAML resource and method for a path (template or concrete URL).

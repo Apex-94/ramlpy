@@ -7,7 +7,7 @@ from ramlpy.model.api import ApiSpec
 from ramlpy.model.method import MethodSpec
 from ramlpy.model.parameters import ParameterSpec
 from ramlpy.model.resource import ResourceSpec
-from ramlpy.validator.engine import resolve_route
+from ramlpy.validator.engine import RouteValidator, resolve_route
 from ramlpy.validator.errors import ValidationResult
 
 
@@ -47,3 +47,16 @@ def test_api_spec_match_route():
     assert ext == {}
 
     assert api.match_route("/missing", "get")[0] is None
+
+
+def test_api_spec_validator_for():
+    resource = ResourceSpec(
+        full_path="/users/{id}",
+        uri_parameters={"id": ParameterSpec(name="id", location="path", type_ref="string")},
+        methods={"post": MethodSpec(method="post")},
+    )
+    api = ApiSpec(resources=[resource])
+    validator = api.validator_for("/users/{id}", "post")
+    assert isinstance(validator, RouteValidator)
+    assert validator.path == "/users/{id}"
+    assert validator.method == "post"

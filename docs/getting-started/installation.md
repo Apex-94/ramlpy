@@ -21,17 +21,6 @@ This installs:
 - `jsonschema>=3.0.0` - JSON Schema validation
 - `typing_extensions>=3.7` - Type hints (Python < 3.10 only)
 
-### With Flask Integration
-
-If you plan to use ramlpy with Flask:
-
-```bash
-pip install ramlpy[flask]
-```
-
-This additionally installs:
-- `Flask>=1.0` - Flask web framework
-
 ### For Development
 
 If you want to contribute to ramlpy or run its tests:
@@ -43,7 +32,6 @@ pip install ramlpy[dev]
 This additionally installs:
 - `pytest>=6.0` - Testing framework
 - `pytest-cov>=2.0` - Coverage reporting
-- `pytest-flask>=1.0` - Flask testing utilities
 - `flake8>=3.0` - Code linting
 
 ## Installing from Source

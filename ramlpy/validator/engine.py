@@ -1,10 +1,11 @@
-"""Main validation engine."""
+"""Framework-agnostic RAML validation engine."""
 
+from ramlpy.exceptions import RamlValidationError
 from ramlpy.path_match import match_raml_path
 from ramlpy.validator.errors import ValidationIssue, ValidationResult
+from ramlpy.validator.jsonschema_support import validate_with_jsonschema
 from ramlpy.validator.media_type import resolve_body_spec
 from ramlpy.validator.scalars import coerce_scalar
-from ramlpy.validator.jsonschema_support import validate_with_jsonschema, HAS_JSONSCHEMA
 
 
 def _header_raw_value(headers, name):
@@ -59,11 +60,30 @@ def _resolve_type_spec(api_spec, type_ref):
     Returns:
         TypeSpec or None
     """
-    if type_ref is None:
+    if type_ref is None or isinstance(type_ref, dict):
         return None
     
     name = type_ref.name if hasattr(type_ref, 'name') else type_ref
     return api_spec.types.get(name)
+
+
+def _parse_complex_type_string(api_spec, t_str, visited):
+    """Helper to parse complex RAML generic strings like 'Employee[]' or 'A | B' into JSON Schema."""
+    if '|' in t_str:
+        types = [t.strip() for t in t_str.split('|')]
+        return {"anyOf": [_parse_complex_type_string(api_spec, t, visited.copy()) for t in types]}
+    elif t_str.endswith('[]'):
+        base_t = t_str[:-2]
+        return {"type": "array", "items": _parse_complex_type_string(api_spec, base_t, visited.copy())}
+    elif t_str in api_spec.types:
+        type_spec = api_spec.types[t_str]
+        if type_spec.name not in visited:
+            visited.add(type_spec.name)
+            return _build_json_schema_from_type(api_spec, type_spec, visited.copy())
+        else:
+            return {}
+    else:
+        return {"type": _raml_type_to_json_type(t_str)}
 
 
 def _build_json_schema_from_type(api_spec, type_spec, visited=None):
@@ -92,7 +112,8 @@ def _build_json_schema_from_type(api_spec, type_spec, visited=None):
         return _convert_inline_definition(api_spec, type_spec.inline_definition, visited)
     
     # Build schema from type properties (fallback for manually constructed TypeSpec)
-    schema = {"type": type_spec.base_type or "object"}
+    base_t = type_spec.base_type or "object"
+    schema = _parse_complex_type_string(api_spec, base_t, visited)
     
     if type_spec.enum:
         schema["enum"] = type_spec.enum
@@ -152,16 +173,15 @@ def _convert_inline_definition(api_spec, definition, visited):
     
     if "type" in definition:
         type_val = definition["type"]
-        if isinstance(type_val, str) and type_val in api_spec.types:
-            # Named type reference
-            type_spec = api_spec.types[type_val]
-            if type_spec.name not in visited:
-                visited.add(type_spec.name)
-                return _build_json_schema_from_type(api_spec, type_spec, visited.copy())
+        
+        if isinstance(type_val, str):
+            parsed_schema = _parse_complex_type_string(api_spec, type_val, visited)
+            if "anyOf" in parsed_schema:
+                schema.update(parsed_schema)
+            elif "type" in parsed_schema and parsed_schema["type"] == "array":
+                schema.update(parsed_schema)
             else:
-                return {}
-        elif isinstance(type_val, str):
-            schema["type"] = _raml_type_to_json_type(type_val)
+                schema.update(parsed_schema)
         else:
             schema["type"] = type_val
     
@@ -169,12 +189,9 @@ def _convert_inline_definition(api_spec, definition, visited):
         schema["properties"] = {}
         required = []
         for prop_name, prop_def in definition["properties"].items():
-            if isinstance(prop_def, dict):
-                if prop_def.get("required"):
-                    required.append(prop_name)
-                schema["properties"][prop_name] = _convert_property_dict(api_spec, prop_def, visited.copy())
-            else:
-                schema["properties"][prop_name] = _scalar_type_to_schema(prop_def)
+            if isinstance(prop_def, dict) and prop_def.get("required"):
+                required.append(prop_name)
+            schema["properties"][prop_name] = _convert_property_dict(api_spec, prop_def, visited.copy())
         if required:
             schema["required"] = required
     
@@ -203,6 +220,9 @@ def _convert_inline_definition(api_spec, definition, visited):
 
 def _convert_property_dict(api_spec, prop_def, visited):
     """Convert a property definition dict to JSON Schema."""
+    if isinstance(prop_def, str):
+        return _parse_complex_type_string(api_spec, prop_def, visited)
+    
     if not isinstance(prop_def, dict):
         return _scalar_type_to_schema(prop_def)
     
@@ -218,7 +238,8 @@ def _convert_property_dict(api_spec, prop_def, visited):
     
     schema = {}
     if isinstance(type_val, str):
-        schema["type"] = _raml_type_to_json_type(type_val)
+        parsed_schema = _parse_complex_type_string(api_spec, type_val, visited)
+        schema.update(parsed_schema)
     elif type_val is not None:
         schema["type"] = type_val
     
@@ -319,7 +340,7 @@ def _add_facets_to_schema(schema, spec):
                  'min_length', 'max_length', 'pattern', 'enum',
                  'minItems', 'maxItems', 'min_items', 'max_items']:
         val = getattr(spec, attr, None)
-        if val is not None:
+        if val is not None and val != [] and val != "":
             json_attr = attr.replace('_', '')
             if json_attr == 'minlength':
                 json_attr = 'minLength'
@@ -376,16 +397,26 @@ def _validate_body(api_spec, method_spec, body, content_type):
     
     # Get the type reference from the body spec
     type_ref = body_spec.type_ref
-    if type_ref is None:
-        return []
+    
+    if isinstance(type_ref, dict):
+        schema = _convert_inline_definition(api_spec, type_ref, set())
+        if not schema:
+            return []
+        return [issue.as_dict() for issue in validate_with_jsonschema(schema, body, "#/body")]
     
     # Resolve the type
     type_spec = _resolve_type_spec(api_spec, type_ref)
-    if type_spec is None:
-        return []
     
-    # Build JSON Schema and validate
-    schema = _build_json_schema_from_type(api_spec, type_spec)
+    # If no exact named type is found, it might be an inline composite (e.g., A | B)
+    if type_spec is None:
+        if isinstance(type_ref, str) and ('|' in type_ref or type_ref.endswith('[]')):
+            schema = _convert_inline_definition(api_spec, {"type": type_ref}, set())
+        else:
+            return []
+    else:
+        # Build JSON Schema and validate
+        schema = _build_json_schema_from_type(api_spec, type_spec)
+        
     if not schema:
         return []
     
@@ -441,41 +472,12 @@ def validate_parameter(param_spec, raw_value, pointer):
     return value, None
 
 
-def validate_request(api_spec, path, method, path_params,
-                     query_params, headers, body, content_type):
-    """Validate an incoming request against the API spec.
-    
-    Args:
-        api_spec: ApiSpec to validate against
-        path: RAML resource path (``/users/{id}``) or concrete request path (``/users/5``)
-        method: HTTP method
-        path_params: Path parameters dict (merged with values parsed from *path* when template matching)
-        query_params: Query parameters dict
-        headers: Request headers dict (matched case-insensitively to RAML header names)
-        body: Request body
-        content_type: Content-Type header value
-    
-    Returns:
-        ValidationResult
-    """
+def _validate_route_inputs(api_spec, resource_spec, method_spec, path_params,
+                           query_params, headers, body, content_type):
+    """Validate parsed handler inputs for a resolved route."""
     path_params = path_params or {}
     query_params = query_params or {}
     headers = headers or {}
-
-    target_resource, target_method, extracted = resolve_route(api_spec, path, method)
-
-    if target_resource is None or target_method is None:
-        return ValidationResult(
-            ok=False,
-            errors=[ValidationIssue(
-                code="route_not_found",
-                message="No RAML route found for %s %s" % (method.upper(), path),
-                pointer="request",
-            ).as_dict()]
-        )
-
-    merged_path_params = dict(extracted)
-    merged_path_params.update(path_params)
 
     errors = []
     validated = {
@@ -484,27 +486,26 @@ def validate_request(api_spec, path, method, path_params,
         "headers": {},
         "body": body,
     }
-    
-    # Validate path parameters
-    for name, spec in target_resource.uri_parameters.items():
+
+    for name, spec in resource_spec.uri_parameters.items():
         value, error = validate_parameter(
-            spec, merged_path_params.get(name), "path.%s" % name
+            spec, path_params.get(name), "path.%s" % name
         )
         if error:
             errors.append(error.as_dict())
         else:
             validated["path_params"][name] = value
-    
-    # Validate query parameters
-    for name, spec in target_method.query_parameters.items():
-        value, error = validate_parameter(spec, query_params.get(name), "query.%s" % name)
+
+    for name, spec in method_spec.query_parameters.items():
+        value, error = validate_parameter(
+            spec, query_params.get(name), "query.%s" % name
+        )
         if error:
             errors.append(error.as_dict())
         else:
             validated["query_params"][name] = value
-    
-    # Validate headers
-    for name, spec in target_method.headers.items():
+
+    for name, spec in method_spec.headers.items():
         value, error = validate_parameter(
             spec, _header_raw_value(headers, name), "headers.%s" % name
         )
@@ -512,9 +513,61 @@ def validate_request(api_spec, path, method, path_params,
             errors.append(error.as_dict())
         else:
             validated["headers"][name] = value
-    
-    # Validate request body
-    body_errors = _validate_body(api_spec, target_method, body, content_type)
-    errors.extend(body_errors)
-    
+
+    errors.extend(_validate_body(api_spec, method_spec, body, content_type))
     return ValidationResult(ok=(len(errors) == 0), data=validated, errors=errors)
+
+
+class RouteValidator(object):
+    """Reusable validator bound to a specific RAML route and method."""
+
+    def __init__(self, api_spec, resource_spec, method_spec):
+        self.api_spec = api_spec
+        self.resource_spec = resource_spec
+        self.method_spec = method_spec
+        self.path = resource_spec.full_path
+        self.method = method_spec.method
+
+    def validate(self, path_params=None, query_params=None, headers=None,
+                 body=None, content_type=None):
+        """Validate parsed request values and return a ValidationResult."""
+        return _validate_route_inputs(
+            self.api_spec,
+            self.resource_spec,
+            self.method_spec,
+            path_params=path_params,
+            query_params=query_params,
+            headers=headers,
+            body=body,
+            content_type=content_type,
+        )
+
+    def validate_or_raise(self, path_params=None, query_params=None, headers=None,
+                          body=None, content_type=None):
+        """Validate parsed request values and raise on failure."""
+        result = self.validate(
+            path_params=path_params,
+            query_params=query_params,
+            headers=headers,
+            body=body,
+            content_type=content_type,
+        )
+        if not result.ok:
+            raise RamlValidationError(
+                "RAML validation failed for %s %s" % (
+                    self.method.upper(), self.path
+                ),
+                errors=result.errors,
+            )
+        return result.data
+
+    def validate_body(self, body, content_type=None):
+        """Validate only the request body for this route."""
+        return self.validate(body=body, content_type=content_type)
+
+    def validate_body_or_raise(self, body, content_type=None):
+        """Validate only the request body and return the validated payload."""
+        return self.validate_or_raise(body=body, content_type=content_type)["body"]
+
+    def __repr__(self):
+        return "RouteValidator(path=%r, method=%r)" % (self.path, self.method)
